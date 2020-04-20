@@ -1,0 +1,22 @@
+---
+
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: rabbitmq-vs
+  namespace: technologistics-stage
+spec:
+  hosts:
+  - "logistics-rabbitmq-stage.technodom.kz"
+  gateways:
+  - main-gateway.istio-system.svc.cluster.local
+  http:
+  - match:
+    - uri:
+        regex: "/(.*)"
+    route:
+    - destination:
+        host: rabbitmq-external
+        port:
+          number: 15672
+

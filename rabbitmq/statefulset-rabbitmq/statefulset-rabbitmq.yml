@@ -1,0 +1,142 @@
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: rabbitmq-internal
+  namespace: technologistics-stage
+  labels:
+    app: rabbitmq
+spec:
+  clusterIP: None
+  ports:
+   - name: http
+     protocol: TCP
+     port: 15672
+   - name: amqp
+     protocol: TCP
+     port: 5672
+  selector:
+    app: rabbitmq
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: rabbitmq-external
+  namespace: technologistics-stage
+  labels:
+    app: rabbitmq
+spec:
+  type: NodePort
+  ports:
+   - name: http
+     protocol: TCP
+     port: 15672
+     targetPort: 15672
+     nodePort: 31673
+   - name: amqp
+     protocol: TCP
+     port: 5672
+     targetPort: 5672
+     nodePort: 30673
+  selector:
+    app: rabbitmq
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rabbitmq
+  namespace: technologistics-stage
+spec:
+  selector:
+    matchLabels:
+      app: rabbitmq
+  serviceName: rabbitmq-internal
+  replicas: 3
+  template:
+    metadata:
+      labels:
+        app: rabbitmq
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - rabbitmq
+            topologyKey: kubernetes.io/hostname
+      serviceAccountName: rabbitmq
+      terminationGracePeriodSeconds: 10
+      containers:        
+      - name: rabbitmq-k8s
+        image: rabbitmq:3.8.3
+        volumeMounts:
+          - name: config-volume
+            mountPath: /etc/rabbitmq
+          - name: rabbitmq-data
+            mountPath: /var/lib/rabbitmq/mnesia
+        ports:
+          - name: http
+            protocol: TCP
+            containerPort: 15672
+          - name: amqp
+            protocol: TCP
+            containerPort: 5672
+        livenessProbe:
+          exec:
+            command: ["rabbitmqctl", "status"]
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 10
+        readinessProbe:
+          exec:
+            command: ["rabbitmqctl", "status"]
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 10
+        imagePullPolicy: Always
+        env:
+          - name: MY_POD_IP
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+          - name: HOSTNAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: RABBITMQ_USE_LONGNAME
+            value: "true"
+          - name: RABBITMQ_NODENAME
+            value: "rabbit@$(HOSTNAME).rabbitmq-internal.$(NAMESPACE).svc.cluster.local"
+          - name: K8S_SERVICE_NAME
+            value: "rabbitmq-internal"
+          - name: RABBITMQ_ERLANG_COOKIE
+            value: "AQHAQZQWXGHVBBFEEQED"
+      volumes:
+        - name: config-volume
+          configMap:
+            name: rabbitmq-config
+            items:
+            - key: rabbitmq.conf
+              path: rabbitmq.conf
+            - key: enabled_plugins
+              path: enabled_plugins
+        - name: rabbitmq-data
+          persistentVolumeClaim:
+            claimName: rabbitmq-data
+  volumeClaimTemplates:
+  - metadata:
+      name: rabbitmq-data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      resources:
+        requests:
+          storage: 1Gi
+      storageClassName: vsphere-storageclass           
