@@ -74,9 +74,9 @@ scsicontrollertype = pvscsi
 
 ### Create base64 encode string for username and password and apply new secret
 ```
-echo -n 'user' | base64
+echo -n 'vsphere_kube_user@vsphere.local' | base64
 
-echo -n 'pass' | base64
+echo -n 'vsphere_kube_user_pass' | base64
 
 cat > vsphere-creds.yml <<EOF
 apiVersion: v1
@@ -132,9 +132,9 @@ On a machine with govc jq, and kubectl installed, run the following script to se
 ```
 #!/bin/bash
 
-export GOVC_USERNAME='kube-pv@vsphere.local'
+export GOVC_USERNAME='vCenter User with admin permissions'
 export GOVC_INSECURE=1
-export GOVC_PASSWORD='pass'
+export GOVC_PASSWORD='vCenter User Pass'
 export GOVC_URL='vCenter FQDN or IP'
 DATACENTER='Name of Datacenter'
 FOLDER='Name of folder'
