@@ -58,15 +58,15 @@ secret-namespace = "kube-system"
 port = "443"
 insecure-flag = "1"
 
-[VirtualCenter "172.16.0.178"]
+[VirtualCenter "vCenter FQDN or IP"]
 datacenters = "TD"
 
 [Workspace]
-server = "172.16.0.178"
-datacenter = "TD"
-default-datastore = "DX200S4_LUN19"
-resourcepool-path = "Kubernetes/stage-kube-cluster"
-folder = "stage-kube"
+server = "vCenter FQDN or IP"
+datacenter = "Name of Datacenter"
+default-datastore = "Name of Datastore"
+resourcepool-path = "Name of Cluster/Name of Resource Pool"
+folder = "Name of Folder where locate your kube vm's"
 
 [Disk]
 scsicontrollertype = pvscsi
@@ -74,9 +74,9 @@ scsicontrollertype = pvscsi
 
 ### Create base64 encode string for username and password and apply new secret
 ```
-echo -n 'kube-pv@vsphere.local' | base64
+echo -n 'user' | base64
 
-echo -n 'dG$p8JgBP4#X' | base64
+echo -n 'pass' | base64
 
 cat > vsphere-creds.yml <<EOF
 apiVersion: v1
@@ -86,8 +86,8 @@ metadata:
  namespace: kube-system
 type: Opaque
 data:
-   172.16.0.178.username: a3ViZS1wdkB2c3BoZXJlLmxvY2Fs
-   172.16.0.178.password: ZEckcDhKZ0JQNCNY
+   172.16.0.178.username: user64encode
+   172.16.0.178.password: pass64encode
 EOF
 
 kubectl apply -f vsphere-creds.yml
@@ -135,9 +135,9 @@ On a machine with govc jq, and kubectl installed, run the following script to se
 export GOVC_USERNAME='kube-pv@vsphere.local'
 export GOVC_INSECURE=1
 export GOVC_PASSWORD='pass'
-export GOVC_URL='172.16.0.178'
-DATACENTER='TD'
-FOLDER='stage-kube'
+export GOVC_URL='vCenter FQDN or IP'
+DATACENTER='Name of Datacenter'
+FOLDER='Name of folder'
 IFS=$'\n'
 for vm in $(govc ls "/$DATACENTER/vm/$FOLDER"); do
   MACHINE_INFO=$(govc vm.info -json -dc=$DATACENTER -vm.ipath="/$vm" -e=true)
@@ -191,7 +191,7 @@ metadata:
 provisioner: kubernetes.io/vsphere-volume
 parameters:
     diskformat: zeroedthick
-    datastore: "DX200S4_LUN19"
+    datastore: "Name of datastore"
 EOF
 
 kubectl apply -f vsphere-storageclass.yml
