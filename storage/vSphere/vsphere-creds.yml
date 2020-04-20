@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: Secret
+metadata:
+ name: vsphere-creds
+ namespace: kube-system
+type: Opaque
+data:
+   172.16.0.178.username: a3ViZS1wdkB2c3BoZXJlLmxvY2Fs
+   172.16.0.178.password: ZEckcDhKZ0JQNCNY
