@@ -168,6 +168,84 @@ data:
 kubectl create -f manifests/gangway-configmap.yaml
 ```
 
-3. Create a Gangway deployment
+3. Create secret with kubernetes ca.crt and ca.key 
 
+```
+kubectl -n auth-system create secret tls dex --key ca.key --cert ca.crt
+```
+
+4. Create a Gangway deployment
+
+```
 kubectl create -f manifests/gangway-deployment.yaml
+```
+
+5. Create a Gangway service
+
+```
+kubectl apply -f manifests/gangway-service.yaml
+```
+
+6. Create Gangway ingress role
+
+```
+kubectl apply -f manifests/gangway-ingress.yaml
+```
+
+Wait till Gangway certificate generated then browse kube-login.example.com. 
+
+7. And login with your LDAP account.
+
+8. Follow the generated instruction to configure your kubectl and kubeconfig file
+
+9. Check your configuration
+
+```
+kubectl get pods
+
+Error from server (Forbidden): pods is forbidden: User "your_ldap_account@example.com" cannot list resource "pods" in API group "" in the namespace "default"
+```
+
+Note: You get ERROR message, because your LDAP user not binding to Role or ClusterRole
+
+### Create RBAC
+
+1. Create Role or ClusterRole and bind User or Group to this Role (In this example we use default pre-creating ClusterRole with view permissions, therefore we create only ClsuterRoleBinding)
+
+```
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: group-binding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+- kind: Group
+  name: "your_ldap_group"
+
+or
+
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: user-binding
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+- kind: User
+  name: "your_ldap_user@example.com"
+```
+
+2. Check your configuration
+
+```
+kubectl get pods
+
+Cool. It works!!!
+```
