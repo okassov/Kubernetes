@@ -1,0 +1,1 @@
+# Kubernetes authentication with LDAP
