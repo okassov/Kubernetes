@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gangway
+  namespace: auth-system
+data:
+  gangway.yaml: |
+    clusterName: "<KUBERNETES CLUSTER NAME>"
+    apiServerURL: "https://<API SERVER URL>:6443"
+    authorizeURL: "https://dex.example.com/auth"
+    tokenURL: "https://dex.example.com/token"
+    clientID: "oidc-auth-client"
+    clientSecret: "XmT7EHo27skGchX0yLQNTYXibm3aNkx5"
+    redirectURL: "https://kube-login.example.com/callback"
+    scopes: ["openid", "profile", "email", "groups", "offline_access"]
+    usernameClaim: "email"
+    emailClaim: "email"
+    trustedCAPath: "/cacerts/tls.crt"
+

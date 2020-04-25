@@ -1,0 +1,52 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex
+  namespace: auth-system
+data:
+  config.yaml: |
+    issuer: https://dex.example.com/
+    web:
+      http: 0.0.0.0:5556
+    frontend:
+      theme: "coreos"
+      issuer: "kube-dtln"
+      issuerUrl: "https://login.ash.dtln.cloud"
+    telemetry:
+      http: 0.0.0.0:5558
+    staticClients:
+    - id: oidc-auth-client
+      redirectURIs:
+      - 'https://kube-login.example.cim/callback'
+      - 'http://dashboard.example.com/oauth2/callback'
+      name: 'oidc-auth-client'
+      secret: XmT7EHo27skGchX0yLQNTYXibm3aNkx5
+    connectors:
+    - type: ldap
+      id: ldap
+      name: LDAP
+      config:
+        host: <LDAP FQDN/IP>:389
+        insecureNoSSL: true
+        insecureSkipVerify: true
+        bindDN: CN=kube_ldap_user,OU=Users,DC=example,DC=com
+        bindPW: 'pass'
+        userSearch:
+          baseDN: OU=Users,DC=example,DC=com
+          filter: (objectClass=person)
+          username: sAMAccountName
+          idAttr: sAMAccountName
+          emailAttr: mail
+          nameAttr: name
+        groupSearch:
+          baseDN: OU=Groups,DC=example,DC=com
+          filter: "(objectClass=group)"
+          userAttr: DN
+          groupAttr: member
+          nameAttr: name
+    oauth2:
+      skipApprovalScreen: true
+    storage:
+      type: kubernetes
+      config:
+        inCluster: true
