@@ -91,7 +91,7 @@ data:
       config:
         inCluster: true
         
-kubectl create -f manifests/dex-cm.yaml
+kubectl create -f manifests/dex-configmap.yaml
 ```
 
 4. Create dex deployment
