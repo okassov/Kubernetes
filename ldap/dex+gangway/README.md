@@ -23,5 +23,151 @@ Both dex.example.com and kube-login.example.com records should points to your in
 
 ### Deploying DEX
 
+1. Create Namespace
 
+```
+kubectl create ns auth-system
+```
 
+2. Apply RBAC for dex deployment
+
+```
+kubectl create -f manifests/dex-rbac.yaml
+```
+
+3. Configure dex configmap with your  and apply it
+
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex
+  namespace: auth-system
+data:
+  config.yaml: |
+    issuer: https://dex.example.com/
+    web:
+      http: 0.0.0.0:5556
+    frontend:
+      theme: "coreos"
+      issuer: "kube-dtln"
+      issuerUrl: "https://login.ash.dtln.cloud"
+    telemetry:
+      http: 0.0.0.0:5558
+    staticClients:
+    - id: oidc-auth-client
+      redirectURIs:
+      - 'https://kuge-login.example.com/callback'
+      - 'http://dashboard.example.com/oauth2/callback'
+      name: 'oidc-auth-client'
+      secret: XmT7EHo27skGchX0yLQNTYXibm3aNkx5
+    connectors:
+    - type: ldap
+      id: ldap
+      name: LDAP
+      config:
+        host: <LDAP FQDN/IP>:389
+        insecureNoSSL: true
+        insecureSkipVerify: true
+        bindDN: CN=kube_ldap_user,OU=Users,DC=example,DC=com
+        bindPW: 'pass'
+        userSearch:
+          baseDN: OU=Users,DC=example,DC=com
+          filter: (objectClass=person)
+          username: sAMAccountName
+          idAttr: sAMAccountName
+          emailAttr: mail
+          nameAttr: name
+        groupSearch:
+          baseDN: OU=Groups,DC=example,DC=com
+          filter: "(objectClass=group)"
+          userAttr: DN
+          groupAttr: member
+          nameAttr: name
+    oauth2:
+      skipApprovalScreen: true
+    storage:
+      type: kubernetes
+      config:
+        inCluster: true
+        
+kubectl create -f manifests/dex-cm.yaml
+```
+
+4. Create dex deployment
+
+```
+kubectl create -f manifests/dex-deploy.yaml
+```
+
+Note: If using PROXY, then add to deployment's init container env with https_proxy for git cloning or pod stacked in ContainerCreating state.
+
+5. Create dex service
+
+```
+kubectl create -f manifests/dex-service.yaml
+```
+
+6. Create dex ingress rule (I use Istio Ingress, therefore create Virtual Service)
+
+```
+kubectl create -f dex-ingress.yaml
+```
+Wait till the Dex certificate generated then browse this link to check that Dex is deployed properly https://dex.example.com/.well-known/openid-configuration
+
+### Kubernetes API configurations
+
+Note: If you have mutli master cluster you need to apply this to all of them
+
+```
+sudo vim /etc/kubernetes/manifests/kube-apiserver.yaml
+
+spec:
+  containers:
+  - command:
+    - kube-apiserver
+    ....
+    - --oidc-issuer-url=https://dex.example.com/
+    - --oidc-client-id=oidc-auth-client
+    - --oidc-username-claim=email
+    - --oidc-groups-claim=groups
+```
+
+### Deploy Gangway
+
+This is the portal the user will access. It generates a user friendly instruction to how setup your token.
+
+1. Generate a secret key for Gangway.
+
+```
+kubectl -n auth-system create secret generic gangway-key --from-literal=sesssionkey=$(openssl rand -base64 32)
+```
+
+2. Configure and create a Gangway configmap.
+
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gangway
+  namespace: auth-system
+data:
+  gangway.yaml: |
+    clusterName: "<CLUSTER NAME>"
+    apiServerURL: "https://<API SERVER URL>:6443"
+    authorizeURL: "https://dex.exmaple.com/auth"
+    tokenURL: "https://dex.exmaple.com/token"
+    clientID: "oidc-auth-client"
+    clientSecret: "XmT7EHo27skGchX0yLQNTYXibm3aNkx5"
+    redirectURL: "https://kube-login.exmaple.com/callback"
+    scopes: ["openid", "profile", "email", "groups", "offline_access"]
+    usernameClaim: "email"
+    emailClaim: "email"
+    trustedCAPath: "/cacerts/tls.crt"
+
+kubectl create -f manifests/gangway-configmap.yaml
+```
+
+3. Create a Gangway deployment
+
+kubectl create -f manifests/gangway-deployment.yaml
