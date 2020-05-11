@@ -1,0 +1,85 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laravel-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: laravel-app
+      version: 'v1'
+  template:
+    metadata:
+      labels:
+        app: laravel-app
+        version: 'v1'
+    spec:
+      initContainers:
+        - args:
+            - /bin/bash
+            - -c
+            - (php artisan migrate --force) && (php artisan db:seed --force) 
+          image: dockerhub.com/okassov/laravel-app:v1
+          envFrom:
+            - configMapRef:
+                name: configmap-env
+          env:
+          - name: DB_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: db-secret
+                key: DB_USERNAME
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: db-secret
+                key: DB_PASSWORD
+          name: artisan-migrate
+          resources:
+            requests:
+              memory: '256Mi'
+              cpu: '0.5'
+            limits:
+              memory: '256Mi'
+              cpu: '0.5'                 
+      containers:
+        - name: laravel-app
+          image: dockerhub.com/okassov/laravel-app:v1
+          envFrom:
+            - configMapRef:
+                name: configmap-env
+          env:
+          - name: DB_USERNAME
+            valueFrom:
+              secretKeyRef:
+                name: db-secret
+                key: DB_USERNAME
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: db-secret
+                key: DB_PASSWORD
+          resources:
+            requests:
+              memory: '1Gi'
+              cpu: '1'
+            limits:
+              memory: '1Gi'
+              cpu: '1'
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: tz-config
+              mountPath: /etc/timezone
+            - name: lt-config
+              mountPath: /etc/localtime
+      volumes:
+        - name: tz-config
+          hostPath:
+            path: /etc/timezone
+        - name: lt-config
+          hostPath:
+            path: /etc/localtime
+
