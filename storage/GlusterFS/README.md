@@ -331,7 +331,7 @@ kubectl apply -f manifests/gluster-client.json
 Create a kubernetes Secret for the admin user password in the following gluster-client-secret.yaml file:
 
 ```
-kubectl apply -f manifests/gluster-client-secret.yml
+kubectl apply -f manifests/gluster-admin-secret.yml
 ```
 
 Kuberentes has built-in plugin for GlusterFS. We need to create a new glusterfs storage class that will use our Heketi service. Create YAML file storage-class.yml likewise:
