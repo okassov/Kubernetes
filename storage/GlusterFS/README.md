@@ -475,20 +475,34 @@ Id:7b2725456116ee53cdef1fb60a31512e    Cluster:8b959511a1194d3cb5cc80d2163fb9ef 
 Get Id from output and find mount point:
 
 ```
-root@vm-gluster-01:# heketi-cli volume info 7b2725456116ee53cdef1fb60a31512e
-Name: vol_7b2725456116ee53cdef1fb60a31512e
-Size: 2
-Volume Id: 7b2725456116ee53cdef1fb60a31512e
-Cluster Id: 8b959511a1194d3cb5cc80d2163fb9ef
-Mount: 172.31.22.113:vol_7b2725456116ee53cdef1fb60a31512e
-Mount Options: backup-volfile-servers=172.31.22.111,172.31.22.112
-Block: false
-Free Size: 0
-Reserved Size: 0
-Block Hosting Restriction: (none)
-Block Volumes: []
-Durability Type: replicate
-Distribute Count: 1
-Replica Count: 3
-Snapshot Factor: 1.00
+root@vm-gluster-01:# heketi-cli volume info 7b2725456116ee53cdef1fb60a31512e --json | jq '.bricks'
+
+[
+  {
+    "id": "48b6907b49849561ad08c7d57c3797e5",
+    "path": "/var/lib/heketi/mounts/vg_7d451447e99471ee25698a82e7d0a91c/brick_48b6907b49849561ad08c7d57c3797e5/brick",
+    "device": "7d451447e99471ee25698a82e7d0a91c",
+    "node": "6917ce84fa4a3d959717fda2ff4b0f78",
+    "volume": "7b2725456116ee53cdef1fb60a31512e",
+    "size": 2097152
+  },
+  {
+    "id": "9e8ba15d02d201d3e06cf9d83e0fcafa",
+    "path": "/var/lib/heketi/mounts/vg_856662043a0484e78fdcc0a2219cb871/brick_9e8ba15d02d201d3e06cf9d83e0fcafa/brick",
+    "device": "856662043a0484e78fdcc0a2219cb871",
+    "node": "dc8758aaf1accc3b1b1597bee87431aa",
+    "volume": "7b2725456116ee53cdef1fb60a31512e",
+    "size": 2097152
+  },
+  {
+    "id": "bc8ad89224c3633e2ec165a52b1200aa",
+    "path": "/var/lib/heketi/mounts/vg_9fb690f49bfdc18eda4d8a6dc7107489/brick_bc8ad89224c3633e2ec165a52b1200aa/brick",
+    "device": "9fb690f49bfdc18eda4d8a6dc7107489",
+    "node": "daceaa19f072643dc28d03e420b037e9",
+    "volume": "7b2725456116ee53cdef1fb60a31512e",
+    "size": 2097152
+  }
+]
 ```
+
+You see all 3 Gluster Nodes with parameter "path", it's mount point of your brick-PV
