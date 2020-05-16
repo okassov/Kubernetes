@@ -7,5 +7,5 @@ parameters:
   resturl: "http://172.31.22.111:8080"
   restuser: "admin"
   secretName: "heketi-secret"
-  secretNamespace: "default"
+  secretNamespace: "gluster"
   volumetype: "replicate:3"
