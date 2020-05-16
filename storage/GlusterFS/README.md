@@ -352,4 +352,143 @@ To use the volume we reference the PVC in the YAML file of any Pod/Deployment li
 kubectl apply -f manifests/pod.yml
 ```
 
+## 4) Adding new disk to working cluster
 
+Just change you topology.json with new added disks and run heketi-cli command:
+
+```
+{
+  "clusters": [
+    {
+      "nodes": [
+        {
+          "node": {
+            "hostnames": {
+              "manage": [
+                "vm-gluster-01"
+              ],
+              "storage": [
+                "172.31.22.111"
+              ]
+            },
+            "zone": 1
+          },
+          "devices": [
+            "/dev/sdb",
+            "/dev/sdc" << New disk
+          ]
+        },
+        {
+          "node": {
+            "hostnames": {
+              "manage": [
+                "vm-gluster-02"
+              ],
+              "storage": [
+                "172.31.22.112"
+              ]
+            },
+            "zone": 2
+          },
+          "devices": [
+            "/dev/sdb",
+            "/dev/sdc" << New disk
+          ]
+        },
+        {
+          "node": {
+            "hostnames": {
+              "manage": [
+                "vm-gluster-03"
+              ],
+              "storage": [
+                "172.31.22.113"
+              ]
+            },
+            "zone": 3
+          },
+          "devices": [
+            "/dev/sdb",
+            "/dev/sdc" << New disk
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+```
+root@vm-gluster-01:# export HEKETI_CLI_SERVER=http://vm-gluster-01:8080
+root@vm-gluster-01:# export HEKETI_CLI_USER=admin
+root@vm-gluster-01:# export HEKETI_CLI_KEY=your_admin_secret
+
+root@vm-gluster-01:# heketi-cli topology load --json=/etc/heketi/topology.json
+```
+
+## How to find Kubernetes PV in Gluster Node FS
+
+First get vol name from Kubernetes pv
+
+```
+root@ ~ () $ kubectl describe pv pvc-3bd6e9fd-02d8-4607-b227-e12bc4f5b425 
+Name:            pvc-3bd6e9fd-02d8-4607-b227-e12bc4f5b425
+Labels:          <none>
+Annotations:     Description: Gluster-Internal: Dynamically provisioned PV
+                 gluster.kubernetes.io/heketi-volume-id: 7b2725456116ee53cdef1fb60a31512e
+                 gluster.org/type: file
+                 kubernetes.io/createdby: heketi-dynamic-provisioner
+                 pv.beta.kubernetes.io/gid: 2001
+                 pv.kubernetes.io/bound-by-controller: yes
+                 pv.kubernetes.io/provisioned-by: kubernetes.io/glusterfs
+Finalizers:      [kubernetes.io/pv-protection]
+StorageClass:    gluster-heketi-external
+Status:          Bound
+Claim:           default/gluster-pvc2
+Reclaim Policy:  Delete
+Access Modes:    RWX
+VolumeMode:      Filesystem
+Capacity:        2Gi
+Node Affinity:   <none>
+Message:         
+Source:
+    Type:                Glusterfs (a Glusterfs mount on the host that shares a pod's lifetime)
+    EndpointsName:       glusterfs-dynamic-3bd6e9fd-02d8-4607-b227-e12bc4f5b425
+    EndpointsNamespace:  default
+    Path:                vol_7b2725456116ee53cdef1fb60a31512e << This is your vol name
+    ReadOnly:            false
+Events:                  <none>
+```
+
+Now on Gluster Node:
+
+```
+root@vm-gluster-01:# export HEKETI_CLI_SERVER=http://vm-gluster-01:8080
+root@vm-gluster-01:# export HEKETI_CLI_USER=admin
+root@vm-gluster-01:# export HEKETI_CLI_KEY=your_admin_secret
+
+root@vm-gluster-01:# heketi-cli volume list | grep vol_7b2725456116ee53cdef1fb60a31512e
+
+Id:7b2725456116ee53cdef1fb60a31512e    Cluster:8b959511a1194d3cb5cc80d2163fb9ef    Name:vol_7b2725456116ee53cdef1fb60a31512e
+```
+
+Get Id from output and find mount point:
+
+```
+root@vm-gluster-01:# heketi-cli volume info 7b2725456116ee53cdef1fb60a31512e
+Name: vol_7b2725456116ee53cdef1fb60a31512e
+Size: 2
+Volume Id: 7b2725456116ee53cdef1fb60a31512e
+Cluster Id: 8b959511a1194d3cb5cc80d2163fb9ef
+Mount: 172.31.22.113:vol_7b2725456116ee53cdef1fb60a31512e
+Mount Options: backup-volfile-servers=172.31.22.111,172.31.22.112
+Block: false
+Free Size: 0
+Reserved Size: 0
+Block Hosting Restriction: (none)
+Block Volumes: []
+Durability Type: replicate
+Distribute Count: 1
+Replica Count: 3
+Snapshot Factor: 1.00
+```
