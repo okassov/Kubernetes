@@ -66,3 +66,290 @@ root@vm-gluster-01:# setenforce 0
 
 ### Distribute Volume Setup
 
+Create a trusted storage pool. On vm-gluster-01 use the following commands:
+
+```
+root@vm-gluster-01:# gluster peer probe vm-gluster-02.example.com
+peer probe: success.
+
+root@vm-gluster-01:# gluster peer probe vm-gluster-03.example.com
+peer probe: success.
+```
+
+We can check the peer status using below command :
+
+```
+root@vm-gluster-01:#gluster peer status
+
+Number of Peers: 2
+
+Hostname: vm-gluster-02.example.com
+State: Peer in Cluster (Connected)
+
+Hostname: vm-gluster-03.example.com
+State: Peer in Cluster (Connected)
+```
+
+## 2) Heketi Setup
+
+Install Heketi on one of the Gluster VM (In my case on vm-gluster-01)
+```
+root@vm-gluster-01:# wget https://github.com/heketi/heketi/releases/download/v9.0.0/heketi-v9.0.0.linux.amd64.tar.gz
+root@vm-gluster-01:# tar xzvf heketi-v9.0.0.linux.amd64.tar.gz
+root@vm-gluster-01:# cd heketi
+root@vm-gluster-01:# cp heketi heketi-cli /usr/local/bin/
+root@vm-gluster-01:# heketi -v
+```
+
+Create the heketi user and the directory structures for the configuration:
+
+```
+root@vm-gluster-01:# groupadd -r -g 515 heketi
+root@vm-gluster-01:# useradd -r -c "Heketi user" -d /var/lib/heketi -s /bin/false -m -u 515 -g heketi heketi
+root@vm-gluster-01:# mkdir -p /var/lib/heketi && chown -R heketi:heketi /var/lib/heketi
+root@vm-gluster-01:# mkdir -p /var/log/heketi && chown -R heketi:heketi /var/log/heketi
+root@vm-gluster-01:# mkdir -p /etc/heketi
+```
+Heketi has several provisioners but here I will be using the ssh We need to set up password-less ssh login between the Gluster nodes so heketi can access them. Generate RSA key pair.
+
+```
+root@vm-gluster-01:# ssh-keygen -f /etc/heketi/heketi_key -t rsa -N ''
+root@vm-gluster-01:# chown heketi:heketi /etc/heketi/heketi_key*
+```
+
+Change Permission for ssh key files in all 3 nodes for heketi access :
+
+```
+root@vm-gluster-01:# cd /root
+root@vm-gluster-01:# mkdir .ssh
+root@vm-gluster-01:# cd .ssh/
+root@vm-gluster-01:# vi authorized_keys
+paste public key file in this file
+
+root@vm-gluster-01:# chmod 600 /root/.ssh/authorized_keys
+root@vm-gluster-01:# chmod 700 /root/.ssh
+root@vm-gluster-01:# service sshd restart
+```
+
+Create the Heketi config file in/etc/heketi/heketi.json
+
+```
+{
+  "_port_comment": "Heketi Server Port Number",
+  "port": "8080",
+  "_use_auth": "Enable JWT authorization. Please enable for deployment",
+  "use_auth": true,
+  "_jwt": "Private keys for access",
+  "jwt": 
+  {
+    "_admin": "Admin has access to all APIs",
+    "admin": {
+      "key": "your_admin_secret"
+    },
+    "_user": "User only has access to /volumes endpoint",
+    "user": {
+      "key": "PASSWORD"
+    }
+  },
+ 
+  "_glusterfs_comment": "GlusterFS Configuration",
+  "glusterfs": 
+   {
+    "_executor_comment": 
+    [
+      "Execute plugin. Possible choices: mock, ssh",
+      "mock: This setting is used for testing and development.",
+      "      It will not send commands to any node.",
+      "ssh:  This setting will notify Heketi to ssh to the nodes.",
+      "      It will need the values in sshexec to be configured.",
+      "kubernetes: Communicate with GlusterFS containers over",
+      "            Kubernetes exec api."
+    ],
+    
+    "executor": "ssh",
+    "_sshexec_comment": "SSH username and private key file information",
+    "sshexec": 
+    {
+      "keyfile": "/etc/heketi/heketi_key",
+      "user": "root",
+      "port": "22",
+      "fstab": "/etc/fstab"
+    },
+ 
+    "_kubeexec_comment": "Kubernetes configuration",
+    "kubeexec": 
+    {
+      "host" :"https://kubernetes.host:8443",
+      "cert" : "/path/to/crt.file",
+      "insecure": false,
+      "user": "kubernetes username",
+      "password": "password for kubernetes user",
+      "namespace": "OpenShift project or Kubernetes namespace",
+      "fstab": "Optional: Specify fstab file on node.  Default is /etc/fstab"
+    },
+ 
+    "_db_comment": "Database file name",
+    "db": "/var/lib/heketi/heketi.db",
+    "brick_max_size_gb" : 1024,
+    "brick_min_size_gb" : 1,
+    "max_bricks_per_volume" : 33,
+ 
+    "_loglevel_comment": 
+    [
+      "Set log level. Choices are:",
+      "  none, critical, error, warning, info, debug",
+      "Default is warning"
+    ],
+    
+    "loglevel" : "debug"
+  }
+}
+```
+
+Create the following Heketi service file /etc/systemd/system/heketi.service
+
+```
+[Unit]
+Description=Heketi Server
+Requires=network-online.target
+After=network-online.target
+ 
+[Service]
+Type=simple
+User=heketi
+Group=heketi
+PermissionsStartOnly=true
+PIDFile=/run/heketi/heketi.pid
+Restart=on-failure
+RestartSec=10
+WorkingDirectory=/var/lib/heketi
+RuntimeDirectory=heketi
+RuntimeDirectoryMode=0755
+ExecStartPre=[ -f "/run/heketi/heketi.pid" ] && /bin/rm -f /run/heketi/heketi.pid
+ExecStart=/usr/local/bin/heketi --config=/etc/heketi/heketi.json
+ExecReload=/bin/kill -s HUP $MAINPID
+KillSignal=SIGINT
+TimeoutStopSec=5
+ 
+[Install]
+WantedBy=multi-user.target
+```
+
+Start the heketi service
+
+```
+root@vm-gluster-01:# systemctl daemon-reload
+root@vm-gluster-01:# systemctl start heketi
+root@vm-gluster-01:# systemctl enable heketi
+```
+
+Create topology /etc/heketi/topology.json config file:
+
+```
+{
+  "clusters": [
+    {
+      "nodes": [
+        {
+          "node": {
+            "hostnames": {
+              "manage": [
+                "vm-gluster-01"
+              ],
+              "storage": [
+                "172.31.22.111"
+              ]
+            },
+            "zone": 1
+          },
+          "devices": [
+            "/dev/sdb"
+          ]
+        },
+        {
+          "node": {
+            "hostnames": {
+              "manage": [
+                "vm-gluster-02"
+              ],
+              "storage": [
+                "172.31.22.112"
+              ]
+            },
+            "zone": 2
+          },
+          "devices": [
+            "/dev/sdb"
+          ]
+        },
+        {
+          "node": {
+            "hostnames": {
+              "manage": [
+                "vm-gluster-03"
+              ],
+              "storage": [
+                "172.31.22.113"
+              ]
+            },
+            "zone": 3
+          },
+          "devices": [
+            "/dev/sdb"
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Where /dev/sdb is a raw block device attached to each gluster node. Then we load topology:
+
+```
+root@vm-gluster-01:# export HEKETI_CLI_SERVER=http://vm-gluster-01:8080
+root@vm-gluster-01:# export HEKETI_CLI_USER=admin
+root@vm-gluster-01:# export HEKETI_CLI_KEY=your_admin_secret
+
+root@vm-gluster-01:# heketi-cli topology load --json=/etc/heketi/topology.json
+```
+
+## 3) Kubernetes Dynamic Provisioner
+
+First you must install glusterfs-fuse package on all Kubernetes Worker Nodes
+
+```
+yum -y install glusterfs-fuse
+```
+
+gluster-client.json needs to be installed on all k8s nodes otherwise the mounting of the GlusterFS volumes will fail. Need to create DeamonSet likewise:
+
+```
+kubectl apply -f manifests/gluster-client.json
+```
+
+Create a kubernetes Secret for the admin user password in the following gluster-client-secret.yaml file:
+
+```
+kubectl apply -f manifests/gluster-client-secret.yml
+```
+
+Kuberentes has built-in plugin for GlusterFS. We need to create a new glusterfs storage class that will use our Heketi service. Create YAML file storage-class.yml likewise:
+
+```
+kubectl apply -f manifests/storage-class.yml
+```
+
+To test it we create a PVC (Persistent Volume Claim) that should dynamically provision a 1GB volume for us in the Gluster storage. Create pvc.yaml likewise :
+
+```
+kubectl apply -f manifest/pvc.yml
+```
+
+To use the volume we reference the PVC in the YAML file of any Pod/Deployment like this for example:
+
+```
+kubectl apply -f manifests/pod.yml
+```
+
+
